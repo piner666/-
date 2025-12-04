@@ -1,10 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import { UserInput, CalculationResult, AIPlanData, SubHealthCondition, Meal } from '../types';
 import { calculateNutrition } from '../utils/calculations';
 import { generateComprehensivePlan, regenerateMealPlan } from '../services/geminiService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { Brain, Flame, Utensils, Zap, Clock, TrendingUp, AlertCircle, Sparkles, RefreshCw, Pill, Moon, Coffee, Stethoscope, Droplet, Wheat, Beef } from 'lucide-react';
+import { Brain, Flame, Utensils, Zap, Clock, TrendingUp, AlertCircle, Sparkles, RefreshCw, Pill, Moon, Coffee, Stethoscope, Droplet, Wheat, Beef, Calendar, CheckCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Props {
@@ -78,6 +77,10 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
   ];
 
   const hasHealthConditions = userData.healthConditions.length > 0 && !userData.healthConditions.includes(SubHealthCondition.None);
+  
+  // Specific warnings
+  const isHighUric = userData.healthConditions.includes(SubHealthCondition.HighUricAcid);
+  const isHighLipid = userData.healthConditions.includes(SubHealthCondition.HighCholesterol);
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -107,7 +110,15 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
           </div>
           <p className="text-sm text-slate-500 font-medium">预计达成周期</p>
           <h3 className="text-3xl font-bold text-slate-800 mt-1">{results.timeToGoal}</h3>
-          <p className="text-xs text-green-600 mt-2 font-medium">目标: {userData.goal}</p>
+          
+          {results.isFeasible !== undefined ? (
+            <div className={`mt-2 flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full w-fit ${results.isFeasible ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {!results.isFeasible ? <AlertCircle size={12} /> : <CheckCircle size={12} />}
+              {results.feasibilityMessage}
+            </div>
+          ) : (
+             <p className="text-xs text-green-600 mt-2 font-medium">目标: {userData.goal}</p>
+          )}
         </div>
 
          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all">
@@ -204,28 +215,33 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
         </div>
       </div>
 
-      {/* 2.5 健康改善指南 (仅当有亚健康选项时显示) */}
+      {/* 2.5 健康改善指南 (更美观的展示) */}
       {hasHealthConditions && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-100 ring-1 ring-purple-50">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-50">
-            <Stethoscope className="text-purple-600" />
-            <h3 className="text-lg font-bold text-slate-800">健康改善指南</h3>
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-              针对: {userData.healthConditions.join('、')}
-            </span>
-          </div>
-          <div className="prose prose-sm prose-slate max-w-none prose-li:marker:text-purple-400 prose-headings:text-purple-800">
-            {loadingInitial ? (
-              <div className="space-y-3 animate-pulse">
-                <div className="h-4 bg-purple-50 rounded w-full"></div>
-                <div className="h-4 bg-purple-50 rounded w-5/6"></div>
+        <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
+           <div className="bg-purple-50 px-6 py-4 flex justify-between items-center border-b border-purple-100">
+             <div className="flex items-center gap-2">
+               <div className="p-1 bg-purple-200 rounded text-purple-700"><Stethoscope size={20} /></div>
+               <h3 className="text-lg font-bold text-purple-900">健康改善指南</h3>
+             </div>
+             <div className="flex gap-2">
+                {isHighUric && <span className="text-xs font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full border border-red-200">高尿酸预警</span>}
+                {isHighLipid && <span className="text-xs font-bold bg-orange-100 text-orange-600 px-3 py-1 rounded-full border border-orange-200">血脂关注</span>}
+             </div>
+           </div>
+           <div className="p-6">
+              <div className="prose prose-sm prose-slate max-w-none prose-headings:text-purple-800 prose-a:text-purple-600">
+                {loadingInitial ? (
+                  <div className="space-y-3 animate-pulse">
+                    <div className="h-4 bg-purple-50 rounded w-full"></div>
+                    <div className="h-4 bg-purple-50 rounded w-5/6"></div>
+                  </div>
+                ) : aiData?.healthAdvice ? (
+                  <ReactMarkdown>{aiData.healthAdvice}</ReactMarkdown>
+                ) : (
+                  <p className="text-slate-400">暂无具体建议</p>
+                )}
               </div>
-            ) : aiData?.healthAdvice ? (
-              <ReactMarkdown>{aiData.healthAdvice}</ReactMarkdown>
-            ) : (
-              <p className="text-slate-400">暂无具体建议</p>
-            )}
-          </div>
+           </div>
         </div>
       )}
 
@@ -267,6 +283,15 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
                     <p className="text-slate-700 font-medium mb-2">{meal.foodItems}</p>
                     <p className="text-xs text-slate-500 mb-4 line-clamp-2">{meal.description}</p>
                     
+                    {/* 素菜推荐 */}
+                    {meal.vegetableRecommendation && (
+                      <div className="bg-green-50 p-2 rounded-lg mb-3 border border-green-100">
+                        <p className="text-xs text-green-800 font-medium flex items-center gap-1">
+                          <Wheat size={12} /> {meal.vegetableRecommendation}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-3 gap-2 text-center text-xs bg-slate-50 p-2 rounded-lg">
                       <div>
                         <span className="block text-slate-400 mb-1">蛋 (P)</span>
@@ -290,11 +315,33 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
         </div>
       </div>
 
-      {/* 4. 补剂与恢复 (双列布局) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* 4. 周饮食策略、补剂与恢复 (3列布局) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* 周饮食策略 */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-teal-100 lg:col-span-1">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-teal-50">
+            <Calendar className="text-teal-600" />
+            <h3 className="text-lg font-bold text-slate-800">周饮食建议与备餐</h3>
+          </div>
+          <div className="prose prose-sm prose-slate max-w-none prose-li:marker:text-teal-400">
+            {loadingInitial ? (
+               <div className="space-y-3 animate-pulse">
+                 <div className="h-4 bg-slate-50 rounded w-full"></div>
+                 <div className="h-4 bg-slate-50 rounded w-5/6"></div>
+                 <div className="h-4 bg-slate-50 rounded w-4/6"></div>
+               </div>
+            ) : aiData?.weeklyAdvice ? (
+               <ReactMarkdown>{aiData.weeklyAdvice}</ReactMarkdown>
+            ) : (
+               <p className="text-slate-400">暂无周建议</p>
+            )}
+          </div>
+        </div>
+
         {/* 补剂建议 */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-50">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 lg:col-span-1">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-blue-50">
             <Pill className="text-blue-500" />
             <h3 className="text-lg font-bold text-slate-800">个性化补剂建议</h3>
           </div>
@@ -313,8 +360,8 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
         </div>
 
         {/* 恢复建议 */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-50">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-indigo-100 lg:col-span-1">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-indigo-50">
             <Moon className="text-indigo-500" />
             <h3 className="text-lg font-bold text-slate-800">睡眠与恢复策略</h3>
           </div>

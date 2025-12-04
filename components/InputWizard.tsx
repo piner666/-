@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserInput, Gender, ActivityLevel, Goal, TrainingHistory, SubHealthCondition, MacroPreference } from '../types';
-import { ChevronRight, ChevronLeft, Activity, Scale, Moon, HeartPulse, Stethoscope, PieChart } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Activity, Scale, Moon, HeartPulse, Stethoscope, PieChart, Target } from 'lucide-react';
 
 interface Props {
   onComplete: (data: UserInput) => void;
@@ -16,6 +15,9 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
     gender: Gender.Male,
     bodyFat: undefined,
     goal: Goal.LoseFat,
+    goalDescription: '',
+    targetWeight: '',
+    targetDurationWeeks: undefined,
     activityLevel: ActivityLevel.Moderate,
     trainingHistory: TrainingHistory.Intermediate,
     macroPreference: MacroPreference.Balanced,
@@ -158,29 +160,65 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
               <Activity className="text-orange-600" /> 目标与活动
             </h2>
             
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">健身目标</label>
+            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-4">
+              <label className="block text-sm font-bold text-orange-800 mb-2 flex items-center gap-2">
+                <Target size={16} /> 核心健身目标
+              </label>
               <select 
                 value={formData.goal}
                 onChange={(e) => setFormData({...formData, goal: e.target.value as Goal})}
-                className="w-full p-3 border border-slate-300 rounded-lg bg-white"
+                className="w-full p-3 border border-orange-200 rounded-lg bg-white mb-3 focus:ring-2 focus:ring-orange-300 outline-none"
               >
                 {Object.values(Goal).map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">日常活动量</label>
-              <select 
-                value={formData.activityLevel}
-                onChange={(e) => setFormData({...formData, activityLevel: e.target.value as ActivityLevel})}
-                className="w-full p-3 border border-slate-300 rounded-lg bg-white"
-              >
-                {Object.values(ActivityLevel).map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
+              <div className="grid grid-cols-2 gap-3">
+                 <div>
+                    <label className="block text-xs font-bold text-orange-700 mb-1">目标体重 (kg)</label>
+                    <input 
+                      type="number" 
+                      placeholder="选填"
+                      value={formData.targetWeight}
+                      onChange={(e) => setFormData({...formData, targetWeight: e.target.value})}
+                      className="w-full p-2 border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-300 outline-none"
+                    />
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-orange-700 mb-1">期望耗时 (周)</label>
+                    <input 
+                      type="number" 
+                      min="1"
+                      max="52"
+                      placeholder="选填 (AI 智能评估)"
+                      value={formData.targetDurationWeeks || ''}
+                      onChange={(e) => setFormData({...formData, targetDurationWeeks: e.target.value ? Number(e.target.value) : undefined})}
+                      className="w-full p-2 border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-300 outline-none"
+                    />
+                 </div>
+              </div>
+              <div className="mt-2">
+                  <label className="block text-xs font-bold text-orange-700 mb-1">具体描述 (AI 参考)</label>
+                  <input 
+                    type="text" 
+                    placeholder="例如：想把体脂降到20%，主要减肚子"
+                    value={formData.goalDescription}
+                    onChange={(e) => setFormData({...formData, goalDescription: e.target.value})}
+                    className="w-full p-2 border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-300 outline-none"
+                  />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">日常活动量</label>
+                <select 
+                  value={formData.activityLevel}
+                  onChange={(e) => setFormData({...formData, activityLevel: e.target.value as ActivityLevel})}
+                  className="w-full p-3 border border-slate-300 rounded-lg bg-white"
+                >
+                  {Object.values(ActivityLevel).map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">训练经验</label>
                 <select 
@@ -191,16 +229,17 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
                   {Object.values(TrainingHistory).map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">饮食结构偏好</label>
-                <select 
-                  value={formData.macroPreference}
-                  onChange={(e) => setFormData({...formData, macroPreference: e.target.value as MacroPreference})}
-                  className="w-full p-3 border border-slate-300 rounded-lg bg-white"
-                >
-                  {Object.values(MacroPreference).map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">饮食结构偏好</label>
+              <select 
+                value={formData.macroPreference}
+                onChange={(e) => setFormData({...formData, macroPreference: e.target.value as MacroPreference})}
+                className="w-full p-3 border border-slate-300 rounded-lg bg-white"
+              >
+                {Object.values(MacroPreference).map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
 
             {/* 自定义比例输入区域 */}

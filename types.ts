@@ -13,11 +13,11 @@ export enum Goal {
 }
 
 export enum ActivityLevel {
-  Sedentary = '久坐 (x1.2)', 
-  Light = '轻度活动 (x1.375)', 
-  Moderate = '中度活动 (x1.55)', 
-  High = '高度活动 (x1.725)', 
-  Athlete = '专业运动员 (x1.9)', 
+  Sedentary = '久坐 - 极少/无运动',
+  Light = '轻度活动 - 每周运动 1-3 次',
+  Moderate = '中度活动 - 每周运动 3-5 次',
+  High = '高度活动 - 每周运动 6-7 次',
+  Athlete = '专业运动员 - 体力工作/双倍训练',
 }
 
 export enum TrainingHistory {
@@ -53,6 +53,9 @@ export interface UserInput {
   gender: Gender;
   bodyFat?: number; // percentage
   goal: Goal;
+  goalDescription?: string; // Specific goal details
+  targetWeight?: string; // kg
+  targetDurationWeeks?: number; // weeks
   activityLevel: ActivityLevel;
   trainingHistory: TrainingHistory;
   macroPreference: MacroPreference; 
@@ -79,6 +82,11 @@ export interface CalculationResult {
   macros: MacroSplit;
   timeToGoal: string; // Estimate
   weeklyChange: string; // Estimate
+  // Feasibility Analysis
+  requiredDeficit?: number; // Daily calorie difference needed
+  isFeasible?: boolean;
+  feasibilityMessage?: string;
+  safeMinWeeks?: number;
 }
 
 export interface MealMacros {
@@ -99,6 +107,7 @@ export interface Meal {
 export interface AIPlanData {
   insight: string;
   mealPlan: Meal[]; // Structured meal plan
+  weeklyAdvice: string; // Weekly diet strategy and prep advice
   supplements: string;
   recovery: string;
   healthAdvice?: string;
