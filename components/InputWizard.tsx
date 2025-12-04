@@ -26,7 +26,8 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
     supplements: '无',
     appetiteStress: 5,
     sleepQuality: 7,
-    healthConditions: [SubHealthCondition.None]
+    healthConditions: [SubHealthCondition.None],
+    customHealthCondition: ''
   });
 
   const nextStep = () => {
@@ -370,7 +371,7 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
               请选择目前存在的亚健康状况（可多选），AI 将根据您的选择提供针对性的功能医学建议。
             </p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               {Object.values(SubHealthCondition).map((condition) => {
                 const isSelected = formData.healthConditions.includes(condition);
                 return (
@@ -389,6 +390,23 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
                   </button>
                 );
               })}
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+               <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <Activity size={16} className="text-emerald-600"/> 
+                  其他健康状况 (补充输入)
+               </label>
+               <input 
+                  type="text" 
+                  placeholder="例如：缺锌、缺铁性贫血、乳糖不耐受、对麸质过敏..."
+                  value={formData.customHealthCondition}
+                  onChange={(e) => setFormData({...formData, customHealthCondition: e.target.value})}
+                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none bg-white"
+                />
+                <p className="text-xs text-slate-500 mt-2">
+                   *如果您输入了具体的营养缺乏（如缺锌），AI 将在餐单和补剂中重点推荐相关食物。
+                </p>
             </div>
           </div>
         );

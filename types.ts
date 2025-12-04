@@ -65,6 +65,7 @@ export interface UserInput {
   appetiteStress: number; // 1-10
   sleepQuality: number; // 1-10
   healthConditions: SubHealthCondition[];
+  customHealthCondition?: string; // User input for other conditions (e.g. Zinc deficiency)
 }
 
 export interface MacroSplit {

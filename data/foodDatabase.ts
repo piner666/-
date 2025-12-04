@@ -1,3 +1,4 @@
+
 export interface FoodItem {
   name: string;
   calories: number; // kcal per 100g (通常指可食部生重，除非特别标注)
@@ -77,18 +78,33 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '海带(鲜)', calories: 13, protein: 1.1, fat: 0.1, carbs: 2.8 },
   { name: '紫菜(干)', calories: 265, protein: 26.7, fat: 1.1, carbs: 48.3 },
   { name: '香菇(鲜)', calories: 26, protein: 2.2, fat: 0.3, carbs: 5.2 },
+  { name: '平菇', calories: 20, protein: 1.9, fat: 0.3, carbs: 4.6 },
+  { name: '金针菇', calories: 32, protein: 2.7, fat: 0.4, carbs: 6.0 },
+  { name: '杏鲍菇', calories: 31, protein: 2.5, fat: 0.1, carbs: 6.3 },
 
   // ==================== 4. 肉类与禽蛋 (优质蛋白) ====================
   // 禽蛋
   { name: '鸡蛋(全蛋)', calories: 144, protein: 13.3, fat: 8.8, carbs: 2.8 },
   { name: '鸡蛋白', calories: 50, protein: 11.0, fat: 0.1, carbs: 1.0 },
   { name: '鸡胸肉', calories: 133, protein: 19.4, fat: 5.0, carbs: 2.5 },
+  { name: '鸡腿(带皮)', calories: 181, protein: 18.0, fat: 11.0, carbs: 0.0 },
+  { name: '鸡翅中', calories: 210, protein: 19.0, fat: 14.0, carbs: 0.0 },
   { name: '鸭胸肉', calories: 128, protein: 19.0, fat: 5.0, carbs: 0.0 },
+  { name: '鸭肉(带皮)', calories: 240, protein: 15.5, fat: 19.7, carbs: 0.2 },
+  { name: '鹅肉', calories: 251, protein: 17.9, fat: 19.9, carbs: 0.0 },
+  { name: '鸽子肉', calories: 201, protein: 17.0, fat: 14.0, carbs: 0.0 },
   
-  // 畜肉 (推荐瘦肉)
+  // 畜肉 (猪牛羊)
   { name: '瘦牛肉', calories: 106, protein: 20.2, fat: 2.3, carbs: 0.0 },
+  { name: '黄牛肉', calories: 106, protein: 20.2, fat: 2.3, carbs: 0.0 },
   { name: '牛腱子', calories: 98, protein: 20.0, fat: 2.0, carbs: 0.0 },
+  { name: '肥牛卷', calories: 330, protein: 14.0, fat: 30.0, carbs: 0.0 },
+  
   { name: '瘦猪肉', calories: 143, protein: 20.3, fat: 6.2, carbs: 1.5 },
+  { name: '五花肉', calories: 349, protein: 13.2, fat: 32.8, carbs: 0.0 },
+  { name: '猪排骨', calories: 278, protein: 16.0, fat: 23.0, carbs: 0.0 },
+  { name: '猪肉糜(半肥瘦)', calories: 330, protein: 15.0, fat: 30.0, carbs: 0.0 },
+  
   { name: '羊腿肉', calories: 111, protein: 19.0, fat: 3.9, carbs: 0.0 },
   
   // ==================== 5. 海产品 (Omega-3/碘/锌) ====================
@@ -103,6 +119,8 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '基围虾', calories: 93, protein: 18.2, fat: 1.0, carbs: 0.0 },
   { name: '鱿鱼(鲜)', calories: 75, protein: 15.6, fat: 1.0, carbs: 0.0 },
   { name: '蛤蜊', calories: 62, protein: 10.0, fat: 1.0, carbs: 3.0 },
+  { name: '花甲', calories: 62, protein: 10.8, fat: 1.1, carbs: 2.4 },
+  { name: '花螺', calories: 92, protein: 16.0, fat: 1.2, carbs: 3.5 },
   { name: '生蚝/牡蛎', calories: 73, protein: 9.0, fat: 2.0, carbs: 4.0 },
 
   // ==================== 6. 水果 (低GI/抗氧化) ====================
@@ -114,6 +132,10 @@ export const defaultChineseFoodDB: FoodItem[] = [
   
   // 常见水果
   { name: '苹果', calories: 52, protein: 0.3, fat: 0.2, carbs: 13.8 },
+  { name: '梨', calories: 51, protein: 0.4, fat: 0.2, carbs: 13.5 },
+  { name: '橘子', calories: 44, protein: 0.9, fat: 0.1, carbs: 10.2 },
+  { name: '葡萄', calories: 45, protein: 0.5, fat: 0.2, carbs: 10.3 },
+  { name: '鲜枣/冬枣', calories: 125, protein: 3.2, fat: 0.3, carbs: 30.5 },
   { name: '猕猴桃', calories: 61, protein: 1.1, fat: 0.5, carbs: 14.7 },
   { name: '香蕉', calories: 89, protein: 1.1, fat: 0.3, carbs: 22.8 },
   { name: '葡萄柚', calories: 33, protein: 0.7, fat: 0.2, carbs: 8.4 },
@@ -122,6 +144,8 @@ export const defaultChineseFoodDB: FoodItem[] = [
   // ==================== 7. 油脂与坚果 ====================
   { name: '橄榄油', calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0 },
   { name: '亚麻籽油', calories: 898, protein: 0.0, fat: 99.8, carbs: 0.0 },
+  { name: '菜籽油', calories: 899, protein: 0.0, fat: 99.9, carbs: 0.0 },
+  { name: '猪油', calories: 897, protein: 0.0, fat: 99.6, carbs: 0.0 },
   { name: '核桃', calories: 654, protein: 15.0, fat: 65.0, carbs: 13.7 },
   { name: '巴旦木/扁桃仁', calories: 579, protein: 21.0, fat: 50.0, carbs: 21.0 },
   { name: '奇亚籽', calories: 486, protein: 16.5, fat: 30.7, carbs: 42.1 },
