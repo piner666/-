@@ -1,4 +1,5 @@
 
+
 export interface FoodItem {
   name: string;
   calories: number; // kcal per 100g (通常指可食部生重，除非特别标注)
@@ -81,6 +82,7 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '平菇', calories: 20, protein: 1.9, fat: 0.3, carbs: 4.6 },
   { name: '金针菇', calories: 32, protein: 2.7, fat: 0.4, carbs: 6.0 },
   { name: '杏鲍菇', calories: 31, protein: 2.5, fat: 0.1, carbs: 6.3 },
+  { name: '口蘑/白蘑菇', calories: 24, protein: 3.1, fat: 0.3, carbs: 3.3 },
 
   // ==================== 4. 肉类与禽蛋 (优质蛋白) ====================
   // 禽蛋
@@ -104,6 +106,8 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '五花肉', calories: 349, protein: 13.2, fat: 32.8, carbs: 0.0 },
   { name: '猪排骨', calories: 278, protein: 16.0, fat: 23.0, carbs: 0.0 },
   { name: '猪肉糜(半肥瘦)', calories: 330, protein: 15.0, fat: 30.0, carbs: 0.0 },
+  { name: '猪肝', calories: 129, protein: 19.3, fat: 3.5, carbs: 5.0 },
+  { name: '鸭血', calories: 55, protein: 13.6, fat: 0.4, carbs: 0.0 },
   
   { name: '羊腿肉', calories: 111, protein: 19.0, fat: 3.9, carbs: 0.0 },
   
@@ -140,6 +144,8 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '香蕉', calories: 89, protein: 1.1, fat: 0.3, carbs: 22.8 },
   { name: '葡萄柚', calories: 33, protein: 0.7, fat: 0.2, carbs: 8.4 },
   { name: '牛油果', calories: 160, protein: 2.0, fat: 14.7, carbs: 8.5 },
+  { name: '番石榴/芭乐', calories: 41, protein: 1.1, fat: 0.4, carbs: 14.3 },
+  { name: '柠檬', calories: 37, protein: 1.1, fat: 0.3, carbs: 9.3 },
 
   // ==================== 7. 油脂与坚果 ====================
   { name: '橄榄油', calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0 },
@@ -149,7 +155,18 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '核桃', calories: 654, protein: 15.0, fat: 65.0, carbs: 13.7 },
   { name: '巴旦木/扁桃仁', calories: 579, protein: 21.0, fat: 50.0, carbs: 21.0 },
   { name: '奇亚籽', calories: 486, protein: 16.5, fat: 30.7, carbs: 42.1 },
-  { name: '南瓜籽', calories: 574, protein: 29.0, fat: 49.0, carbs: 15.0 }
+  { name: '南瓜籽', calories: 574, protein: 29.0, fat: 49.0, carbs: 15.0 },
+  { name: '黑芝麻', calories: 559, protein: 19.1, fat: 46.1, carbs: 24.0 },
+
+  // ==================== 8. 乳制品与饮品 (钙/钾/功能性) ====================
+  { name: '牛奶(全脂)', calories: 65, protein: 3.0, fat: 3.2, carbs: 3.4 },
+  { name: '酸奶(无糖)', calories: 62, protein: 3.2, fat: 3.0, carbs: 4.0 },
+  { name: '奶酪(切达)', calories: 402, protein: 25.0, fat: 33.0, carbs: 1.3 },
+  { name: '椰子水', calories: 19, protein: 0.7, fat: 0.2, carbs: 3.7 },
+  
+  // ==================== 9. 其他功能性补充 (锌/镁) ====================
+  { name: '黑巧克力(85%)', calories: 598, protein: 7.8, fat: 42.6, carbs: 45.8 },
+  { name: '小麦胚芽', calories: 382, protein: 23.0, fat: 9.7, carbs: 52.0 },
 ];
 
 export const getFoodDatabase = (): FoodItem[] => {

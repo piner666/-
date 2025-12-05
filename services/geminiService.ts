@@ -35,17 +35,12 @@ const generateContentWithRetry = async (ai: GoogleGenAI, model: string, contents
 
 // Robust JSON extraction and parsing
 const extractAndParseJson = (text: string, type: 'array' | 'object' = 'object'): any => {
-  // 1. Remove Markdown code blocks
   let cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-  // 2. Extract the relevant JSON block
   const firstCurly = cleaned.indexOf('{');
   const firstSquare = cleaned.indexOf('[');
-  
   let start = -1;
   let end = -1;
   
-  // Decide whether to look for object or array based on hint or first occurrence
   if (type === 'array' || (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly))) {
     start = firstSquare;
     end = cleaned.lastIndexOf(']');
@@ -58,145 +53,149 @@ const extractAndParseJson = (text: string, type: 'array' | 'object' = 'object'):
     cleaned = cleaned.substring(start, end + 1);
   }
 
-  // 3. Try parsing
   try {
     return JSON.parse(cleaned);
   } catch (e) {
     console.warn("JSON parse failed, attempting sanitation:", e);
-    
-    // 4. Sanitize strategy for "Bad control character" (typically unescaped newlines in strings)
     const sanitized = cleaned.replace(/[\x00-\x1F]+/g, " ");
-    
     try {
       return JSON.parse(sanitized);
     } catch (e2) {
       console.error("Sanitized JSON parse failed:", e2);
-      throw new Error("无法解析 AI 返回的数据格式 (JSON Error)");
+      throw new Error("无法解析 AI 返回的数据格式");
     }
   }
 };
 
+// Shared Context Builders
+const buildUserContext = (user: UserInput, results: CalculationResult) => {
+  const predefinedHealth = user.healthConditions.filter(c => c !== '无').join(', ');
+  const customHealth = user.customHealthCondition ? user.customHealthCondition : '';
+  const fullHealthConditions = [predefinedHealth, customHealth].filter(Boolean).join('; ');
+  
+  let initialSnackName = "午加餐";
+  if (user.workoutTime.includes('早晨')) initialSnackName = "早加餐";
+  else if (user.workoutTime.includes('晚上')) initialSnackName = "晚加餐";
 
-// 生成完整的结构化计划
-export const generateComprehensivePlan = async (user: UserInput, results: CalculationResult): Promise<AIPlanData> => {
-  try {
-    const ai = getAIClient();
-    const foodDBContext = getFormattedFoodDBString();
-    
-    // Determine Initial Snack Name based on Workout Time
-    let initialSnackName = "午加餐"; // Default to Afternoon Snack
-    if (user.workoutTime.includes('早晨')) {
-      initialSnackName = "早加餐"; // Morning Workout -> Morning Snack (Post-workout)
-    } else if (user.workoutTime.includes('晚上')) {
-      initialSnackName = "晚加餐"; // Evening Workout -> Evening Snack
-    }
-    // Afternoon workout or Rest day -> defaults to Afternoon Snack "午加餐"
-
-    // Construct target string
-    const targetString = `
-      - 主要目标: ${user.goal}
-      - 详细描述: ${user.goalDescription || '无'}
-      - 具体量化: ${user.targetWeight ? `目标体重 ${user.targetWeight}kg` : ''}${user.targetDurationWeeks ? ` (用户计划 ${user.targetDurationWeeks} 周达成)` : ''}
-    `;
-
-    // Construct Health Conditions String
-    const predefinedHealth = user.healthConditions.filter(c => c !== '无').join(', ');
-    const customHealth = user.customHealthCondition ? user.customHealthCondition : '';
-    const fullHealthConditions = [predefinedHealth, customHealth].filter(Boolean).join('; ');
-
-    const prompt = `
-      扮演一位世界级的运动营养师和功能医学专家。请根据用户数据计算结果，生成一份详细的结构化建议。
-      
+  return {
+    initialSnackName,
+    fullHealthConditions,
+    basePrompt: `
       用户档案:
       - 性别: ${user.gender}, 年龄: ${user.age}, 体重: ${user.weight}kg
-      ${targetString}
-      - 训练经验: ${user.trainingHistory}
-      - 训练时间: ${user.workoutTime} (Suggested Snack: ${initialSnackName})
-      - 压力/睡眠: ${user.appetiteStress}/10, ${user.sleepQuality}/10
-      - 健康筛查(亚健康状态/其他): ${fullHealthConditions || '无'}
-      
-      计算指标:
-      - TDEE: ${results.tdee} kcal
-      - 目标热量: ${results.targetCalories} kcal
-      - 预计达成周期: ${results.timeToGoal}
-      - 预期每周变化: ${results.weeklyChange}
-      - 宏量营养素: 蛋白质 ${results.macros.protein}g, 脂肪 ${results.macros.fats}g, 碳水 ${results.macros.carbs}g
-      
-      **参考食物数据库 (每100g参考值):**
-      ${foodDBContext}
-      *(请在设计餐单和计算每餐营养时，优先参考上述数据库中的数值进行估算，确保总热量和宏量营养素与目标接近)*
-      
-      **关键要求：**
-      1. **饮食风格必须为典型的中式饮食（Chinese Cuisine）**。使用蒸、煮、炖、快炒、凉拌等中式烹饪方式。食材选用中国市场常见的蔬菜（如青菜、西兰花、冬瓜）、肉类（鸡胸、瘦牛肉、鱼、虾）和主食（米饭、糙米、红薯、玉米、面条）。**严禁**出现不符合国人习惯的西式冷沙拉、奶酪三明治等。
-      2. **蔬菜摄入**：午餐和晚餐必须额外明确推荐 2-3 种具体的素菜（如：清炒时蔬、凉拌木耳）。
-      3. **水果摄入**：早餐或加餐中必须包含水果推荐。
-      4. 补剂建议必须包含具体的科学推荐剂量范围（例如：3-5g/天）。
-      5. **健康指南 (强约束)**：
-         - 如果有 **消化系统亚健康**，必须基于功能医学 **5R 方案** (Remove, Replace, Reinoculate, Repair, Rebalance) 给出建议。餐单中避免难以消化食物。
-         - 如果有 **高血脂/胆固醇偏高**，请在饮食建议中明确指出：限制饱和脂肪（如肥肉、奶油）和胆固醇的摄入，建议增加富含 Omega-3 的食物（如深海鱼）和可溶性纤维。**餐单中严禁出现五花肉、肥牛等高脂肉类**。
-         - 如果有 **高尿酸/痛风风险**，请在饮食建议中明确指出：严格避免含糖饮料（尤其是果糖），限制肉类总体摄入量（特别是瘦肉、内脏、海鲜），并**强烈建议增加低脂乳制品**摄入。**餐单中严禁出现海鲜、内脏、浓肉汤**。
-      6. **特定营养素缺乏处理**：如果“健康筛查”中包含了用户自定义的输入（例如：缺锌、缺铁、缺钙等），你必须在餐单中**显式推荐**富含该营养素的食物（例如缺锌推荐牡蛎、瘦肉；缺铁推荐红肉、动物血等），并在补剂建议中给出具体的补充方案。
-      7. **一致性 (Consistency) - 极重要**：
-         - **餐单内容必须完全贯彻健康指南中的建议**。
-         - AI 将严格检查餐单中的每一项食物是否符合上述健康限制。
-      8. **食物利用率优化（氨基酸互补）**：在设计餐单时，请特别注意**提高蛋白质利用率**。尝试在同一餐中搭配**全谷物（如糙米、燕麦）+ 豆类（如豆腐、红豆）+ 适量肉/蛋**。这种混合搭配能实现氨基酸互补，显著提升蛋白质的生物价。
-      9. **包含食谱 (重要)**：每餐必须包含 \`recipe\` 对象，提供具体的食材清单（ingredients）和烹饪步骤（instructions）。
-      
-      **餐单结构规则 (严格):**
-      - 餐单必须且只能包含 4 餐：**"早餐"**, **"午餐"**, **"晚餐"**, 和 **"${initialSnackName}"**。
-      - **不要**生成名为 "加餐" 的通用餐点，必须使用上面指定的具体名称（"${initialSnackName}"）。
-      
-      **周饮食策略**：请提供一周的饮食规划策略（约200字）。
-      
-      **OUTPUT FORMAT RULES (STRICT):**
-      - Return RAW JSON only.
-      - **Do NOT use literal control characters (newlines, tabs) inside string values.**
-      - Use "\\n" for line breaks within strings.
-      - Ensure the JSON is valid and parseable.
-
-      JSON Structure:
-      {
-        "insight": "一段简短有力的教练洞察...",
-        "mealPlan": [
-          {
-            "name": "早餐",
-            "foodItems": "...",
-            "description": "...",
-            "vegetableRecommendation": "", 
-            "macros": { "calories": 400, "protein": 25, "fat": 10, "carbs": 50 },
-            "recipe": {
-               "ingredients": ["燕麦 50g", "牛奶 200ml"],
-               "instructions": ["1. ...", "2. ..."],
-               "tips": "..."
-            }
-          },
-          {
-            "name": "${initialSnackName}",
-            "foodItems": "...",
-            ...
-          },
-          ...
-        ],
-        "weeklyAdvice": "...",
-        "supplements": "...",
-        "recovery": "...",
-        "healthAdvice": "..."
-      }
-    `;
-
-    const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt);
-
-    const text = response.text;
-    if (!text) throw new Error("AI 未返回数据");
-    
-    return extractAndParseJson(text, 'object') as AIPlanData;
-
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
-  }
+      - 目标: ${user.goal} (${user.goalDescription || ''})
+      - 训练: ${user.trainingHistory}, 时间: ${user.workoutTime}
+      - 健康状况: ${fullHealthConditions || '无'}
+      - TDEE: ${results.tdee} kcal, 目标热量: ${results.targetCalories} kcal
+      - 宏量目标: P ${results.macros.protein}g, F ${results.macros.fats}g, C ${results.macros.carbs}g
+    `
+  };
 };
 
+// --- Module 1: Insight (Fast) ---
+export const generateInsight = async (user: UserInput, results: CalculationResult): Promise<{ insight: string }> => {
+  const ai = getAIClient();
+  const { basePrompt } = buildUserContext(user, results);
+  
+  const prompt = `
+    ${basePrompt}
+    请作为一个高级运动营养师，用**一句话**（约50字）给出对该用户当前状况和目标的犀利洞察。重点在于“核心矛盾”或“成功关键”。
+    
+    Output JSON: { "insight": "..." }
+  `;
+
+  const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt);
+  return extractAndParseJson(response.text!, 'object');
+};
+
+// --- Module 2: Meal Plan (Heavy) ---
+export const generateMealPlanOnly = async (user: UserInput, results: CalculationResult): Promise<{ mealPlan: Meal[] }> => {
+  const ai = getAIClient();
+  const { basePrompt, initialSnackName, fullHealthConditions } = buildUserContext(user, results);
+  const foodDBContext = getFormattedFoodDBString();
+
+  const prompt = `
+    ${basePrompt}
+    **任务：设计一日中式运动餐单**
+    
+    **关键规则：**
+    1. **参考食物库**：${foodDBContext}
+    2. **功能性食物应用 (强制)**：检测到用户健康状况（如缺钙、贫血、缺锌、痛风等），**必须**在餐单中包含对应的高效食物（如牛奶、猪肝、生蚝、黑巧克力、低嘌呤食物等）。
+       - 缺钙/闭经 -> 必须含奶制品/豆制品/黑芝麻。
+       - 缺铁/贫血 -> 必须含红肉/动物血/肝脏。
+    3. **中式烹饪**：符合中国饮食习惯。
+    4. **食谱隔离**：\`recipe\` 对象只能包含该餐的食材。
+    5. **结构**：必须包含 4 餐： "早餐", "午餐", "晚餐", "${initialSnackName}"。
+    
+    Output JSON: 
+    { 
+      "mealPlan": [
+        {
+          "name": "早餐",
+          "foodItems": "...",
+          "description": "...",
+          "vegetableRecommendation": "...",
+          "macros": { "calories": 0, "protein": 0, "fat": 0, "carbs": 0 },
+          "recipe": { 
+             "ingredients": ["Item Name + Quantity (String Only)", "e.g. 燕麦 50g"], 
+             "instructions": ["Step 1..."], 
+             "tips": "..." 
+          }
+        },
+        ...
+      ] 
+    }
+  `;
+
+  const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt);
+  return extractAndParseJson(response.text!, 'object');
+};
+
+// --- Module 3: Guidance (Medium) ---
+export const generateGuidance = async (user: UserInput, results: CalculationResult): Promise<{ weeklyAdvice: string; supplements: string; recovery: string; healthAdvice: string }> => {
+  const ai = getAIClient();
+  const { basePrompt, fullHealthConditions } = buildUserContext(user, results);
+
+  const prompt = `
+    ${basePrompt}
+    **任务：生成营养与恢复建议**
+    
+    要求：
+    1. **补剂建议**：基于用户目标和健康状况（${fullHealthConditions}），给出科学补剂方案（剂量/时机）。
+    2. **健康改善指南**：针对用户的健康问题（如消化差、高血脂、缺微量元素等），给出5R方案或特定饮食禁忌。
+    3. **周饮食策略**：一周的备餐建议或循环策略。
+    4. **恢复**：睡眠与压力管理。
+    
+    Output JSON:
+    {
+      "weeklyAdvice": "...",
+      "supplements": "...",
+      "recovery": "...",
+      "healthAdvice": "..."
+    }
+  `;
+
+  const response = await generateContentWithRetry(ai, 'gemini-2.5-flash', prompt);
+  return extractAndParseJson(response.text!, 'object');
+};
+
+// --- Legacy Wrapper (Deprecated but kept for backward compatibility if needed, though UI will verify) ---
+export const generateComprehensivePlan = async (user: UserInput, results: CalculationResult): Promise<AIPlanData> => {
+  // Parallel execution for speed
+  const [insightData, mealData, guidanceData] = await Promise.all([
+    generateInsight(user, results),
+    generateMealPlanOnly(user, results),
+    generateGuidance(user, results)
+  ]);
+
+  return {
+    ...insightData,
+    ...mealData,
+    ...guidanceData
+  };
+};
+
+// ... (Existing meal regeneration functions: regenerateMealPlan, regenerateSingleMeal, adjustSingleMeal, modifyMealPlan remain unchanged)
 // 单独重新生成餐单 (返回 Meal[])
 export const regenerateMealPlan = async (user: UserInput, results: CalculationResult): Promise<Meal[]> => {
   try {
@@ -236,7 +235,8 @@ export const regenerateMealPlan = async (user: UserInput, results: CalculationRe
       3. **数据结构**：返回严格的 JSON 数组。
       4. **健康一致性**：严格遵守健康限制。
       5. **氨基酸互补**：优先设计包含“豆类+谷物+肉/蛋”组合的餐点。
-      6. **包含食谱**：每餐必须包含 \`recipe\` 对象。
+      6. **食谱范围**：每餐 \`recipe\` 只能包含该餐的食材，严禁包含其他餐的食材。
+      7. **功能性食物应用**：如果用户健康条件涉及缺钙/闭经、缺铁/贫血、缺锌、缺镁等，**必须**从数据库中选取对应的高含量食物（如牛奶、猪肝、生蚝、黑巧克力等）加入餐单。
       
       **餐单结构规则:**
       - 必须且只能包含 4 餐：**"早餐"**, **"午餐"**, **"晚餐"**, 和 **"${initialSnackName}"**。
@@ -250,6 +250,11 @@ export const regenerateMealPlan = async (user: UserInput, results: CalculationRe
         {
           "name": "早餐",
           ...
+          "recipe": { 
+             "ingredients": ["Item Name + Quantity (String Only)"], 
+             "instructions": ["Step 1..."], 
+             "tips": "..." 
+          }
         },
         {
           "name": "${initialSnackName}",
@@ -306,7 +311,8 @@ export const regenerateSingleMeal = async (
       1. **Protein Complementation (氨基酸互补)**: HIGHLY ENCOURAGE combinations of Whole Grains + Legumes/Beans + Lean Meat/Egg in this single meal. (e.g., Rice + Tofu + Chicken, or Porridge + Beans + Egg). This improves protein bioavailability.
       2. **Chinese Cuisine**: Authentic cooking methods.
       3. **Variety**: Different ingredients from the original meal provided above.
-      4. **Include Recipe**: Provide detailed \`recipe\` object.
+      4. **Include Recipe**: Provide detailed \`recipe\` object. The recipe MUST ONLY use ingredients listed in this meal's 'foodItems'. Do NOT list ingredients for other meals.
+      5. **Functional Food**: If user health requires specific nutrients (Ca, Fe, Zn, Mg), try to incorporate a relevant high-nutrient food from the database if appropriate for this meal type.
       
       **Constraints:**
       - Must respect health conditions: ${fullHealthConditions || 'None'}
@@ -322,7 +328,11 @@ export const regenerateSingleMeal = async (
         "description": "...",
         "vegetableRecommendation": "...",
         "macros": { "calories": ${currentMeal.macros.calories}, "protein": ${currentMeal.macros.protein}, "fat": ${currentMeal.macros.fat}, "carbs": ${currentMeal.macros.carbs} },
-        "recipe": { "ingredients": ["..."], "instructions": ["..."], "tips": "..." }
+        "recipe": { 
+           "ingredients": ["Item Name + Quantity (String Only)"], 
+           "instructions": ["..."], 
+           "tips": "..." 
+        }
       }
     `;
 
@@ -363,7 +373,7 @@ export const adjustSingleMeal = async (
       2. Recalculate "macros".
       3. Return ONLY valid JSON object.
       4. No literal newlines in strings.
-      5. **Update Recipe**: Ensure \`recipe\` matches modifications.
+      5. **Update Recipe**: Ensure \`recipe\` matches modifications. The recipe ingredients must MATCH the new 'foodItems' exactly.
       
       JSON Output Example:
       {
@@ -372,7 +382,10 @@ export const adjustSingleMeal = async (
         "description": "...",
         "vegetableRecommendation": "...",
         "macros": { "calories": 500, "protein": 30, "fat": 15, "carbs": 60 },
-        "recipe": { "ingredients": ["..."], "instructions": ["..."] }
+        "recipe": { 
+           "ingredients": ["Item Name + Quantity (String Only)"], 
+           "instructions": ["..."] 
+        }
       }
     `;
 
@@ -396,7 +409,8 @@ export const modifyMealPlan = async (
   currentMeals: Meal[], 
   action: 'add',
   targetIndex?: number,
-  specificMealName?: string
+  specificMealName?: string,
+  preferredFoodTypes: string[] = [] // Optional preferred food types
 ): Promise<Meal[]> => {
   try {
     const ai = getAIClient();
@@ -414,24 +428,45 @@ export const modifyMealPlan = async (
     let mealsContext = JSON.parse(JSON.stringify(currentMeals)) as Meal[];
     let promptTask = "";
 
+    const hasSpecificTypes = preferredFoodTypes && preferredFoodTypes.length > 0;
+
+    const foodTypeConstraint = hasSpecificTypes 
+      ? `
+        STRICT INGREDIENT CONSTRAINT: The user explicitly requested ONLY the following food types for this meal: ${preferredFoodTypes.join(', ')}. 
+        - YOU MUST NOT INCLUDE any food items that do not fall into these categories.
+        - Example: If only "Fruit" is selected, do NOT include nuts, yogurt, or grains.
+        - Example: If "Fruit" and "Nuts" are listed, you can include both.
+        - If "Dairy" is not selected, do NOT include milk or yogurt.
+      ` 
+      : "";
+
+    // Disable the general amino acid rule if the user has restricted the types, 
+    // because "Fruit only" naturally contradicts "Grain + Legume + Meat".
+    const aminoAcidInstruction = hasSpecificTypes 
+        ? "" 
+        : `7. **Amino Acid Complementation**: Whenever possible, combine Grains + Legumes + Animal Protein.`;
+
     if (action === 'add') {
        if (specificMealName) {
          promptTask = `
             USER ACTION: Ensure the meal plan includes "${specificMealName}".
+            ${foodTypeConstraint}
             
             Current Active Meals List (JSON): ${JSON.stringify(mealsContext)}
             
             TASK:
             1. Check if a meal named "${specificMealName}" already exists in the list.
-            2. **IF IT EXISTS**: Do NOT create a duplicate. Instead, ADD one complementary food item to the EXISTING "${specificMealName}" meal to increase its portion/variety.
+            2. **IF IT EXISTS**: Do NOT create a duplicate. Instead, REVISE the EXISTING "${specificMealName}" meal to match the ingredient constraints.
             3. **IF IT DOES NOT EXIST**: Create a new meal named "${specificMealName}".
             4. Adjust portion sizes of OTHER meals slightly to keep TOTAL Daily Calories at approx ${results.targetCalories} kcal.
             5. Ensure the new food/meal fits Chinese Cuisine.
-            6. **Include Recipe**: The modified or new meal MUST have a valid \`recipe\` object.
+            6. **Include Recipe**: The modified or new meal MUST have a valid \`recipe\` object. This recipe MUST only contain ingredients for THIS specific meal.
+            ${aminoAcidInstruction}
          `;
        } else {
          promptTask = `
             USER ACTION: ADD a new meal (e.g., "加餐", "Pre-workout Snack", or "Supper").
+            ${foodTypeConstraint}
             
             Current Active Meals List (JSON): ${JSON.stringify(mealsContext)}
             
@@ -439,8 +474,8 @@ export const modifyMealPlan = async (
             1. Add ONE new realistic Chinese meal option to the list.
             2. Reduce the portion sizes of existing meals slightly so the TOTAL Daily Calories remains constant at approx ${results.targetCalories} kcal.
             3. Ensure the new meal fits the Chinese Cuisine style.
-            4. **Amino Acid Complementation**: The new meal MUST, whenever possible, combine **Grains + Legumes + Animal Protein**.
-            5. **Include Recipe**: The new meal MUST have a \`recipe\` object.
+            ${aminoAcidInstruction}
+            5. **Include Recipe**: The new meal MUST have a \`recipe\` object. This recipe MUST only contain ingredients for THIS specific meal.
          `;
        }
     }
@@ -467,7 +502,10 @@ export const modifyMealPlan = async (
           "description": "...", 
           "vegetableRecommendation": "...", 
           "macros": { ... },
-          "recipe": { "ingredients": ["..."], "instructions": ["..."] }
+          "recipe": { 
+             "ingredients": ["Item Name + Quantity (String Only)"], 
+             "instructions": ["..."] 
+          }
         }
       ]
     `;
