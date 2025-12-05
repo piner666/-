@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { UserInput, Gender, ActivityLevel, Goal, TrainingHistory, SubHealthCondition, MacroPreference } from '../types';
-import { ChevronRight, ChevronLeft, Activity, Scale, Moon, HeartPulse, Stethoscope, PieChart, Target } from 'lucide-react';
+import { UserInput, Gender, ActivityLevel, Goal, TrainingHistory, SubHealthCondition, MacroPreference, WorkoutTime } from '../types';
+import { ChevronRight, ChevronLeft, Activity, Scale, Moon, HeartPulse, Stethoscope, PieChart, Target, Clock } from 'lucide-react';
 
 interface Props {
   onComplete: (data: UserInput) => void;
@@ -20,6 +20,7 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
     targetDurationWeeks: undefined,
     activityLevel: ActivityLevel.Moderate,
     trainingHistory: TrainingHistory.Intermediate,
+    workoutTime: WorkoutTime.Evening, // Default
     macroPreference: MacroPreference.Balanced,
     customMacroRatio: { p: 30, f: 20, c: 50 }, // Default custom values
     waterIntake: '正常',
@@ -228,6 +229,18 @@ const InputWizard: React.FC<Props> = ({ onComplete }) => {
                   className="w-full p-3 border border-slate-300 rounded-lg bg-white"
                 >
                   {Object.values(TrainingHistory).map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                  <Clock size={16} /> 常规训练时段 (AI 将优化餐前餐后营养)
+                </label>
+                <select 
+                  value={formData.workoutTime}
+                  onChange={(e) => setFormData({...formData, workoutTime: e.target.value as WorkoutTime})}
+                  className="w-full p-3 border border-slate-300 rounded-lg bg-white"
+                >
+                  {Object.values(WorkoutTime).map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
             </div>

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { UserInput, CalculationResult, AIPlanData, SubHealthCondition, Meal } from '../types';
 import { calculateNutrition } from '../utils/calculations';
-import { generateComprehensivePlan, regenerateMealPlan, regenerateSingleMeal, adjustSingleMeal } from '../services/geminiService';
+import { generateComprehensivePlan, regenerateMealPlan, regenerateSingleMeal, adjustSingleMeal, modifyMealPlan } from '../services/geminiService';
+import { defaultChineseFoodDB, FoodItem } from '../data/foodDatabase';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { Brain, Flame, Utensils, Zap, Clock, TrendingUp, AlertCircle, Sparkles, RefreshCw, Pill, Moon, Coffee, Stethoscope, Wheat, Calendar, CheckCircle, Edit2, Check, X } from 'lucide-react';
+import { Brain, Flame, Utensils, Zap, Clock, TrendingUp, AlertCircle, Sparkles, RefreshCw, Pill, Moon, Coffee, Stethoscope, Wheat, Calendar, CheckCircle, Edit2, Check, X, AlertTriangle, Droplet, Wind, Leaf, Activity, PlusCircle, BookOpen, ChefHat, Search, ArrowRightLeft, Sunrise, Sun } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b']; // Protein (Blue), Fat (Green), Carbs (Orange)
+const MEAL_ORDER = ['早餐', '早加餐', '午餐', '午加餐', '晚餐', '晚加餐'];
 
 const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
   const [results, setResults] = useState<CalculationResult | null>(null);
@@ -27,6 +29,19 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
   const [refreshingMealIndex, setRefreshingMealIndex] = useState<number | null>(null);
   const [adjustmentPrompt, setAdjustmentPrompt] = useState('');
   const [isAdjustingMeal, setIsAdjustingMeal] = useState(false);
+  
+  // Add Meal Modal State
+  const [isAddMealModalOpen, setIsAddMealModalOpen] = useState(false);
+
+  // Recipe View State
+  const [viewingRecipeIndex, setViewingRecipeIndex] = useState<number | null>(null);
+
+  // Food Detail Modal State
+  const [selectedFoodDetail, setSelectedFoodDetail] = useState<{
+    originalText: string;
+    dbMatch: FoodItem | undefined;
+    mealIndex: number;
+  } | null>(null);
 
   useEffect(() => {
     const calc = calculateNutrition(userData);
@@ -54,6 +69,18 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
     initAI();
   }, [userData]);
 
+  // Sort meals logic
+  const sortMeals = (meals: Meal[]) => {
+    return [...meals].sort((a, b) => {
+      const indexA = MEAL_ORDER.indexOf(a.name);
+      const indexB = MEAL_ORDER.indexOf(b.name);
+      // If not in list, put at end but preserve relative order if possible or just push to end
+      const valA = indexA === -1 ? 99 : indexA;
+      const valB = indexB === -1 ? 99 : indexB;
+      return valA - valB;
+    });
+  };
+
   const handleSwapMeal = async () => {
     if (!results) return;
     setLoadingMealRefresh(true);
@@ -74,11 +101,22 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
     
     setRefreshingMealIndex(index);
     try {
-      const originalMeal = aiData.mealPlan[index];
-      const newMeal = await regenerateSingleMeal(userData, originalMeal);
+      // Because we sort meals for display, we need to find the correct meal in the original array
+      // or just work with the sorted object reference if possible.
+      // The easiest way is to find the meal by unique properties or reference in the original array.
+      // Since `sortMeals` creates a new array, the objects inside are references.
+      const sortedMeals = sortMeals(aiData.mealPlan);
+      const targetMeal = sortedMeals[index];
+      
+      // Find index in original array
+      const realIndex = aiData.mealPlan.findIndex(m => m === targetMeal);
+      
+      if (realIndex === -1) return;
+
+      const newMeal = await regenerateSingleMeal(userData, targetMeal);
       
       const newPlan = [...aiData.mealPlan];
-      newPlan[index] = newMeal;
+      newPlan[realIndex] = newMeal;
       
       setAiData({
         ...aiData,
@@ -97,9 +135,15 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
     
     setIsAdjustingMeal(true);
     try {
-      const updatedMeal = await adjustSingleMeal(userData, results, aiData.mealPlan[index], adjustmentPrompt);
+      const sortedMeals = sortMeals(aiData.mealPlan);
+      const targetMeal = sortedMeals[index];
+      const realIndex = aiData.mealPlan.findIndex(m => m === targetMeal);
+
+      if (realIndex === -1) return;
+
+      const updatedMeal = await adjustSingleMeal(userData, results, targetMeal, adjustmentPrompt);
       const newPlan = [...aiData.mealPlan];
-      newPlan[index] = updatedMeal;
+      newPlan[realIndex] = updatedMeal;
       setAiData({ ...aiData, mealPlan: newPlan });
       setEditingMealIndex(null);
       setAdjustmentPrompt('');
@@ -110,9 +154,60 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
     }
   };
 
+  const handleAddMealOption = async (mealType: string) => {
+    if (!aiData || !results) return;
+    setIsAddMealModalOpen(false); // Close modal first
+    setLoadingMealRefresh(true);
+    try {
+      const newPlan = await modifyMealPlan(userData, results, aiData.mealPlan, 'add', undefined, mealType);
+      setAiData({ ...aiData, mealPlan: newPlan });
+    } catch (err) {
+      console.error(err);
+      alert("添加失败，请重试");
+    } finally {
+      setLoadingMealRefresh(false);
+    }
+  };
+
   const cancelEdit = () => {
     setEditingMealIndex(null);
     setAdjustmentPrompt('');
+  };
+
+  // Helper to find food in DB
+  const findFoodInDB = (text: string): FoodItem | undefined => {
+    // Clean the text: remove numbers, units, brackets
+    const keyword = text.replace(/[\d\.]+[kgml碗个勺g]+/gi, '').replace(/[()（）]/g, '').trim();
+    if (!keyword) return undefined;
+    
+    // Fuzzy search
+    return defaultChineseFoodDB.find(
+      item => item.name.includes(keyword) || keyword.includes(item.name)
+    );
+  };
+
+  const handleFoodClick = (text: string, mealIndex: number) => {
+    const match = findFoodInDB(text);
+    setSelectedFoodDetail({
+      originalText: text,
+      dbMatch: match,
+      mealIndex: mealIndex
+    });
+  };
+
+  const handleReplaceFood = () => {
+    if (!selectedFoodDetail) return;
+    
+    const { mealIndex, originalText } = selectedFoodDetail;
+    
+    // Close modal
+    setSelectedFoodDetail(null);
+    
+    // Open edit mode
+    setEditingMealIndex(mealIndex);
+    
+    // Pre-fill prompt
+    setAdjustmentPrompt(`请把 "${originalText}" 替换成其他营养价值类似的食材。`);
   };
 
   if (!results) return <div className="p-12 text-center text-slate-500">正在计算营养数据...</div>;
@@ -133,15 +228,258 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
   const hasCustomCondition = !!userData.customHealthCondition && userData.customHealthCondition.trim().length > 0;
   const hasAnyHealthConditions = hasStandardConditions || hasCustomCondition;
   
-  // Specific warnings
-  const isHighUric = userData.healthConditions.includes(SubHealthCondition.HighUricAcid);
-  const isHighLipid = userData.healthConditions.includes(SubHealthCondition.HighCholesterol);
+  // Health Tag Configuration Helper
+  const getHealthTagConfig = (condition: SubHealthCondition) => {
+    switch (condition) {
+      case SubHealthCondition.HighCholesterol:
+        return { color: 'bg-orange-100 text-orange-700 border-orange-200', icon: <Droplet size={14} />, label: '血脂关注' };
+      case SubHealthCondition.HighUricAcid:
+        return { color: 'bg-red-100 text-red-700 border-red-200', icon: <AlertTriangle size={14} />, label: '尿酸预警' };
+      case SubHealthCondition.Digestive:
+        return { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <Leaf size={14} />, label: '消化系统' };
+      case SubHealthCondition.Liver:
+        return { color: 'bg-amber-100 text-amber-700 border-amber-200', icon: <Activity size={14} />, label: '肝功能' };
+      case SubHealthCondition.Kidney:
+        return { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: <Activity size={14} />, label: '肾功能' };
+      case SubHealthCondition.Adrenal:
+        return { color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: <Zap size={14} />, label: '肾上腺' };
+      case SubHealthCondition.Thyroid:
+        return { color: 'bg-violet-100 text-violet-700 border-violet-200', icon: <Wind size={14} />, label: '甲状腺' };
+      case SubHealthCondition.FemaleGonad:
+        return { color: 'bg-pink-100 text-pink-700 border-pink-200', icon: <Activity size={14} />, label: '女性调理' };
+      case SubHealthCondition.MaleGonad:
+        return { color: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: <Activity size={14} />, label: '男性调理' };
+      default:
+        return { color: 'bg-slate-100 text-slate-700 border-slate-200', icon: <Activity size={14} />, label: condition };
+    }
+  };
+
+  // Prepare Sorted Meals for display
+  const sortedMeals = aiData?.mealPlan ? sortMeals(aiData.mealPlan) : [];
 
   return (
-    <div className="space-y-8 animate-fadeIn pb-12">
+    <div className="space-y-8 animate-fadeIn pb-12 relative">
+      
+      {/* Add Meal Selection Modal */}
+      {isAddMealModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full relative border border-slate-100 overflow-hidden">
+            <button 
+              onClick={() => setIsAddMealModalOpen(false)}
+              className="absolute top-3 right-3 p-1.5 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors z-10"
+            >
+              <X size={16} className="text-slate-600" />
+            </button>
+            
+            <div className="p-6">
+               <h3 className="text-xl font-bold text-slate-800 mb-6 text-center">添加哪一顿加餐？</h3>
+               <div className="space-y-3">
+                 <button 
+                   onClick={() => handleAddMealOption('早加餐')}
+                   className="w-full flex items-center p-4 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 transition-all group"
+                 >
+                   <div className="p-2 bg-amber-100 text-amber-600 rounded-lg group-hover:bg-amber-200 mr-4">
+                     <Sunrise size={24} />
+                   </div>
+                   <div className="text-left">
+                     <span className="block font-bold text-slate-700 group-hover:text-amber-800">早加餐</span>
+                     <span className="text-xs text-slate-400">早餐与午餐之间</span>
+                   </div>
+                 </button>
+
+                 <button 
+                   onClick={() => handleAddMealOption('午加餐')}
+                   className="w-full flex items-center p-4 rounded-xl border border-slate-200 hover:border-orange-400 hover:bg-orange-50 transition-all group"
+                 >
+                   <div className="p-2 bg-orange-100 text-orange-600 rounded-lg group-hover:bg-orange-200 mr-4">
+                     <Sun size={24} />
+                   </div>
+                   <div className="text-left">
+                     <span className="block font-bold text-slate-700 group-hover:text-orange-800">午加餐</span>
+                     <span className="text-xs text-slate-400">午餐与晚餐之间</span>
+                   </div>
+                 </button>
+
+                 <button 
+                   onClick={() => handleAddMealOption('晚加餐')}
+                   className="w-full flex items-center p-4 rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 transition-all group"
+                 >
+                   <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg group-hover:bg-indigo-200 mr-4">
+                     <Moon size={24} />
+                   </div>
+                   <div className="text-left">
+                     <span className="block font-bold text-slate-700 group-hover:text-indigo-800">晚加餐</span>
+                     <span className="text-xs text-slate-400">晚餐之后</span>
+                   </div>
+                 </button>
+               </div>
+               <p className="text-xs text-slate-400 text-center mt-6">
+                 * 若该餐点已存在，将自动补充食物到现有餐单中。
+               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Food Detail Modal */}
+      {selectedFoodDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full relative border border-slate-100 overflow-hidden">
+            <button 
+              onClick={() => setSelectedFoodDetail(null)}
+              className="absolute top-3 right-3 p-1.5 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors z-10"
+            >
+              <X size={16} className="text-slate-600" />
+            </button>
+            
+            <div className="bg-gradient-to-br from-green-50 to-white p-6 pb-4 border-b border-green-50">
+               <div className="flex items-center gap-3">
+                 <div className="bg-white p-2 rounded-lg shadow-sm text-green-600 border border-green-100">
+                    <Search size={24} />
+                 </div>
+                 <div>
+                   <h3 className="text-lg font-bold text-slate-800">{selectedFoodDetail.originalText}</h3>
+                   {selectedFoodDetail.dbMatch ? (
+                     <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                       <CheckCircle size={10} /> 数据库匹配: {selectedFoodDetail.dbMatch.name}
+                     </p>
+                   ) : (
+                     <p className="text-xs text-slate-400">数据库暂无精确匹配</p>
+                   )}
+                 </div>
+               </div>
+            </div>
+
+            <div className="p-6">
+              {selectedFoodDetail.dbMatch ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-50 p-3 rounded-lg text-center">
+                      <span className="text-xs text-slate-400 block mb-1">热量 / 100g</span>
+                      <span className="text-xl font-bold text-slate-800">{selectedFoodDetail.dbMatch.calories}</span>
+                      <span className="text-xs text-slate-500 ml-1">kcal</span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg text-center">
+                      <span className="text-xs text-slate-400 block mb-1">蛋白质</span>
+                      <span className="text-xl font-bold text-blue-600">{selectedFoodDetail.dbMatch.protein}</span>
+                      <span className="text-xs text-slate-500 ml-1">g</span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg text-center">
+                      <span className="text-xs text-slate-400 block mb-1">脂肪</span>
+                      <span className="text-xl font-bold text-green-600">{selectedFoodDetail.dbMatch.fat}</span>
+                      <span className="text-xs text-slate-500 ml-1">g</span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-lg text-center">
+                      <span className="text-xs text-slate-400 block mb-1">碳水</span>
+                      <span className="text-xl font-bold text-orange-600">{selectedFoodDetail.dbMatch.carbs}</span>
+                      <span className="text-xs text-slate-500 ml-1">g</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 text-center">* 数据基于每100g可食部参考值</p>
+                </div>
+              ) : (
+                <div className="text-center py-4 text-slate-500 text-sm">
+                   <p>无法从本地数据库获取该特定食材的详细营养数据。</p>
+                   <p className="text-xs mt-2">但这不影响总热量的计算。</p>
+                </div>
+              )}
+
+              <button 
+                onClick={handleReplaceFood}
+                className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl hover:bg-slate-800 transition-all font-medium text-sm shadow-lg shadow-slate-200"
+              >
+                <ArrowRightLeft size={16} /> 替换此食材 (AI)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recipe Modal Overlay */}
+      {viewingRecipeIndex !== null && sortedMeals[viewingRecipeIndex] && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto relative border border-slate-100 flex flex-col">
+            <button 
+              onClick={() => setViewingRecipeIndex(null)}
+              className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors z-10"
+            >
+              <X size={20} className="text-slate-600" />
+            </button>
+            
+            <div className="p-6 md:p-8 flex-1 overflow-y-auto">
+              <div className="flex items-center gap-3 mb-6">
+                 <div className="bg-amber-100 p-4 rounded-full text-amber-600 shadow-sm border border-amber-200">
+                   <ChefHat size={32} />
+                 </div>
+                 <div>
+                   <h3 className="text-2xl font-bold text-slate-800">{sortedMeals[viewingRecipeIndex].name} 食谱</h3>
+                   <p className="text-sm text-slate-500 font-medium">健康烹饪指南</p>
+                 </div>
+              </div>
+              
+              {sortedMeals[viewingRecipeIndex].recipe ? (
+                <div className="space-y-6">
+                   <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                      <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 border-b border-slate-200 pb-2">
+                        <Utensils size={18} className="text-amber-500" /> 准备食材
+                      </h4>
+                      <ul className="grid grid-cols-1 gap-2">
+                         {sortedMeals[viewingRecipeIndex].recipe!.ingredients.map((item, idx) => (
+                           <li key={idx} className="flex items-center gap-3 text-sm text-slate-700 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
+                              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                              {item}
+                           </li>
+                         ))}
+                      </ul>
+                   </div>
+                   
+                   <div>
+                      <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Flame size={18} className="text-orange-500" /> 烹饪步骤
+                      </h4>
+                      <ol className="space-y-4">
+                         {sortedMeals[viewingRecipeIndex].recipe!.instructions.map((step, idx) => (
+                           <li key={idx} className="flex gap-3">
+                              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold mt-0.5 shadow-sm">
+                                {idx + 1}
+                              </span>
+                              <span className="text-sm text-slate-600 leading-relaxed pt-0.5">{step}</span>
+                           </li>
+                         ))}
+                      </ol>
+                   </div>
+                   
+                   {sortedMeals[viewingRecipeIndex].recipe!.tips && (
+                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-sm text-indigo-800 flex items-start gap-2">
+                        <span className="font-bold flex-shrink-0 mt-0.5">💡 小贴士:</span>
+                        <span>{sortedMeals[viewingRecipeIndex].recipe!.tips}</span>
+                     </div>
+                   )}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                   <p>暂无详细食谱信息</p>
+                   <p className="text-xs mt-2">请尝试刷新该餐单以获取制作步骤</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+               <button 
+                 onClick={() => setViewingRecipeIndex(null)}
+                 className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium text-sm"
+               >
+                 关闭食谱
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. 核心指标卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all">
+        {/* ... existing metric cards ... */}
+         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-md transition-all">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Flame size={60} className="text-orange-500" />
           </div>
@@ -273,15 +611,28 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
       {/* 2.5 健康改善指南 */}
       {hasAnyHealthConditions && (
         <div className="bg-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
-           <div className="bg-purple-50 px-6 py-4 flex justify-between items-center border-b border-purple-100">
+           <div className="bg-purple-50 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-purple-100 gap-3">
              <div className="flex items-center gap-2">
                <div className="p-1 bg-purple-200 rounded text-purple-700"><Stethoscope size={20} /></div>
                <h3 className="text-lg font-bold text-purple-900">健康改善指南</h3>
              </div>
-             <div className="flex gap-2">
-                {isHighUric && <span className="text-xs font-bold bg-red-100 text-red-600 px-3 py-1 rounded-full border border-red-200">高尿酸预警</span>}
-                {isHighLipid && <span className="text-xs font-bold bg-orange-100 text-orange-600 px-3 py-1 rounded-full border border-orange-200">血脂关注</span>}
-                {hasCustomCondition && <span className="text-xs font-bold bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full border border-indigo-200">自定义关注</span>}
+             <div className="flex flex-wrap gap-2">
+                {userData.healthConditions
+                  .filter(c => c !== SubHealthCondition.None)
+                  .map(c => {
+                    const config = getHealthTagConfig(c);
+                    return (
+                      <span key={c} className={`flex items-center gap-1 text-xs font-bold px-3 py-1 rounded-full border ${config.color} shadow-sm`}>
+                        {config.icon} {config.label}
+                      </span>
+                    );
+                  })
+                }
+                {hasCustomCondition && (
+                  <span className="flex items-center gap-1 text-xs font-bold bg-teal-100 text-teal-700 px-3 py-1 rounded-full border border-teal-200 shadow-sm">
+                     <Edit2 size={12} /> {userData.customHealthCondition}
+                  </span>
+                )}
              </div>
            </div>
            <div className="p-6">
@@ -326,9 +677,9 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
              </div>
           ) : aiError ? (
              <div className="text-center text-red-400 py-4">加载餐单失败</div>
-          ) : aiData?.mealPlan && Array.isArray(aiData.mealPlan) ? (
+          ) : sortedMeals.length > 0 ? (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {aiData.mealPlan.map((meal: Meal, index: number) => {
+                {sortedMeals.map((meal: Meal, index: number) => {
                   const isEditing = editingMealIndex === index;
                   const isRefreshing = refreshingMealIndex === index;
                   const isUpdatingAny = isAdjustingMeal || (refreshingMealIndex !== null);
@@ -355,25 +706,6 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
                         <div className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
                            <Flame size={12} /> {meal.macros.calories} kcal
                         </div>
-                        
-                        {canEdit && (
-                           <>
-                             <button
-                               onClick={() => handleRefreshSingleMeal(index)}
-                               className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                               title="刷新此餐 (优化蛋白质搭配)"
-                             >
-                               <RefreshCw size={16} />
-                             </button>
-                             <button 
-                               onClick={() => setEditingMealIndex(index)}
-                               className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                               title="微调此餐"
-                             >
-                               <Edit2 size={16} />
-                             </button>
-                           </>
-                        )}
                       </div>
                     </div>
                     
@@ -406,8 +738,48 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
                       </div>
                     ) : (
                       <>
-                        <p className="text-slate-700 font-medium mb-2">{meal.foodItems}</p>
+                        {/* Interactive Food Items */}
+                        <div className="text-slate-700 font-medium mb-3 leading-relaxed">
+                          {meal.foodItems.split(/,|，|\n/).map(s => s.trim()).filter(s => s).map((item, idx, arr) => (
+                             <span key={idx}>
+                                <span 
+                                  onClick={() => handleFoodClick(item, index)}
+                                  className="cursor-pointer border-b border-dotted border-slate-400 hover:text-indigo-600 hover:border-indigo-600 transition-colors"
+                                >
+                                  {item}
+                                </span>
+                                {idx < arr.length - 1 && <span className="mr-1">, </span>}
+                             </span>
+                          ))}
+                        </div>
+                        
                         <p className="text-xs text-slate-500 mb-4 line-clamp-2">{meal.description}</p>
+                        
+                        {/* Action Buttons Row */}
+                        {canEdit && (
+                          <div className="flex gap-2 mb-4">
+                             <button
+                               onClick={() => setViewingRecipeIndex(index)}
+                               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors font-bold text-xs border border-amber-100 shadow-sm"
+                             >
+                               <BookOpen size={16} /> 查看食谱
+                             </button>
+                             <button
+                               onClick={() => handleRefreshSingleMeal(index)}
+                               className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100"
+                               title="刷新此餐 (优化蛋白质搭配)"
+                             >
+                               <RefreshCw size={18} />
+                             </button>
+                             <button 
+                               onClick={() => setEditingMealIndex(index)}
+                               className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                               title="微调此餐"
+                             >
+                               <Edit2 size={18} />
+                             </button>
+                          </div>
+                        )}
                         
                         {/* 素菜推荐 */}
                         {meal.vegetableRecommendation && (
@@ -437,6 +809,19 @@ const ResultsDashboard: React.FC<Props> = ({ userData, onReset }) => {
                   </div>
                   );
                 })}
+                
+                {/* Add Meal Button */}
+                <button 
+                  onClick={() => setIsAddMealModalOpen(true)}
+                  disabled={loadingMealRefresh || isAdjustingMeal}
+                  className="flex flex-col items-center justify-center p-8 rounded-xl border-2 border-dashed border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all group min-h-[250px] text-slate-400 hover:text-indigo-600"
+                >
+                  <div className="p-3 bg-slate-100 rounded-full group-hover:bg-indigo-100 transition-colors mb-3">
+                    <PlusCircle size={28} />
+                  </div>
+                  <span className="font-bold">添加餐点</span>
+                  <span className="text-xs text-slate-400 mt-1">系统将自动平衡总热量</span>
+                </button>
              </div>
           ) : (
              <div className="text-center text-slate-400 py-8">暂无餐单数据</div>

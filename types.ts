@@ -26,6 +26,13 @@ export enum TrainingHistory {
   Advanced = '高级 (3+ 年)',
 }
 
+export enum WorkoutTime {
+  Morning = '早晨训练 (早餐前后)',
+  Afternoon = '下午训练 (午餐后/晚餐前)',
+  Evening = '晚上训练 (晚餐前后)',
+  RestDay = '休息日/无固定时间'
+}
+
 export enum SubHealthCondition {
   None = '无',
   Liver = '肝功能亚健康',
@@ -58,6 +65,7 @@ export interface UserInput {
   targetDurationWeeks?: number; // weeks
   activityLevel: ActivityLevel;
   trainingHistory: TrainingHistory;
+  workoutTime: WorkoutTime; // New field
   macroPreference: MacroPreference; 
   customMacroRatio?: { p: number; f: number; c: number }; // Protein, Fat, Carbs percentages
   waterIntake: string;
@@ -97,12 +105,20 @@ export interface MealMacros {
   carbs: number; // grams
 }
 
+// New Interface for Recipe Details
+export interface Recipe {
+  ingredients: string[]; // List of ingredients with estimated quantities
+  instructions: string[]; // Step-by-step cooking instructions
+  tips?: string; // Chef's tips (optional)
+}
+
 export interface Meal {
   name: string; // e.g., "早餐", "午餐"
   foodItems: string; // e.g., "小米粥 1碗, 水煮蛋 2个"
-  description: string; // Cooking method or details
-  vegetableRecommendation?: string; // New field for specific veggie suggestions
+  description: string; // Short summary
+  vegetableRecommendation?: string; 
   macros: MealMacros;
+  recipe?: Recipe; // Detailed recipe structure
 }
 
 export interface AIPlanData {

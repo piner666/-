@@ -149,7 +149,6 @@ export const defaultChineseFoodDB: FoodItem[] = [
   { name: '核桃', calories: 654, protein: 15.0, fat: 65.0, carbs: 13.7 },
   { name: '巴旦木/扁桃仁', calories: 579, protein: 21.0, fat: 50.0, carbs: 21.0 },
   { name: '奇亚籽', calories: 486, protein: 16.5, fat: 30.7, carbs: 42.1 },
-  { name: '亚麻籽', calories: 534, protein: 18.0, fat: 42.0, carbs: 29.0 },
   { name: '南瓜籽', calories: 574, protein: 29.0, fat: 49.0, carbs: 15.0 }
 ];
 
